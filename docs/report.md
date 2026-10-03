@@ -971,36 +971,79 @@ so every operation required by the brief is reachable in one screen.
 
 ### 3.4 Screenshots
 
-> **TODO — replace this section with screenshots.**
+Captured by `scripts/capture_screens.py`, which drives the real
+application with Playwright, signs in through the actual login form,
+and navigates the sidebar — so every image below is the running
+application, not a mock-up.
 
-Required by the brief: each working screen, plus at least one shot of
-the development environment. Suggested set:
+| # | Screen | What it shows | File |
+|---|---|---|---|
+| 1 | Login | Sign-in and self-registration tabs, with the demo accounts listed | [`01-login.png`](screens/01-login.png) |
+| 2 | Dashboard | Six metric tiles, current-term sections, grade distribution, departments, and the recent grade-change audit trail | [`02-dashboard.png`](screens/02-dashboard.png) |
+| 3 | Students | Student list with department, level, GPA, advisor and course count | [`03-students.png`](screens/03-students.png) |
+| 4 | Instructors | Staff list with rank, hire date, salary and sections taught | [`04-instructors.png`](screens/04-instructors.png) |
+| 5 | Courses & Sections | Section list showing instructor, room, capacity, enrolled count and fill percentage from the PL/pgSQL function | [`05-courses.png`](screens/05-courses.png) |
+| 6 | Enrolments | Enrolment list with status and letter grade; the Enrol / Grade / Withdraw tabs | [`06-enrolments.png`](screens/06-enrolments.png) |
+| 7 | Assignments | Assignments with submitted, enrolled, average score | [`07-assignments.png`](screens/07-assignments.png) |
+| 8 | Attendance | Attendance records per section, session and student | [`08-attendance.png`](screens/08-attendance.png) |
+| 9 | Reports | Query 1's result in the application, with summary statistics and CSV download | [`09-reports.png`](screens/09-reports.png) |
+| 10 | User Admin | Account management: status, role grants and revocations | [`10-user-admin.png`](screens/10-user-admin.png) |
+| 11 | Reports → PL/pgSQL | **The procedural blocks executed live.** Each row is the application calling a function or procedure; the last two rows are the procedure's own `RAISE EXCEPTION` refusals | [`11-reports-plpgsql.png`](screens/11-reports-plpgsql.png) |
+| 12 | Reports → SQL source | The query text, so the SQL graded on paper is visibly the SQL the app runs | [`12-reports-sql.png`](screens/12-reports-sql.png) |
 
-| # | Screen | File |
-|---|---|---|
-| 1 | Login | `docs/screens/01-login.png` |
-| 2 | Register tab | `docs/screens/02-register.png` |
-| 3 | Dashboard (admin) | `docs/screens/03-dashboard.png` |
-| 4 | Students — View | `docs/screens/04-students-view.png` |
-| 5 | Students — Insert | `docs/screens/05-students-insert.png` |
-| 6 | Instructors — View | `docs/screens/06-instructors.png` |
-| 7 | Courses & Sections | `docs/screens/07-sections.png` |
-| 8 | Enrolments — Enrol | `docs/screens/08-enrol.png` |
-| 9 | Enrolments — Grade | `docs/screens/09-grade.png` |
-| 10 | Assignments | `docs/screens/10-assignments.png` |
-| 11 | Attendance | `docs/screens/11-attendance.png` |
-| 12 | Reports — Results | `docs/screens/12-reports.png` |
-| 13 | Reports — PL/pgSQL output | `docs/screens/13-plpgsql.png` |
-| 14 | User Administration | `docs/screens/14-admin.png` |
-| 15 | Database connection refused | `docs/screens/15-db-error.png` |
-| 16 | Development environment | `docs/screens/16-dev-environment.png` |
+#### Development environment
 
-Number 15 is worth including deliberately: it shows the application
-explaining a database refusal in the user's own terms, which is the
-clearest evidence that the constraint layer is wired through to the
-interface.
+`supabase/migrations/verify_plpgsql.sql` run against PostgreSQL:
 
-### 3.5 Deployment
+```
+-- Applied to a clean database, in order
+psql "$DATABASE_URL" -f supabase/migrations/0001_schema.sql
+psql "$DATABASE_URL" -f supabase/migrations/0002_plpgsql.sql
+psql "$DATABASE_URL" -f supabase/migrations/0003_seed.sql
+psql "$DATABASE_URL" -f supabase/migrations/verify_plpgsql.sql
+```
+
+The full captured session, covering all 8 queries and all 8 procedural
+blocks with their output, is in
+[`docs/captured_output.txt`](captured_output.txt).
+
+---
+
+## 3.5 Role-based access, demonstrated
+
+The sidebar is built per role at runtime, so the difference is visible
+rather than merely asserted:
+
+| Role | Screens visible |
+|---|---|
+| `admin` | 9 — everything |
+| `registrar` | 8 — everything except User Admin |
+| `i.kaya` (instructor) | 6 — Dashboard, Courses, Enrolments, Assignments, Attendance, Reports |
+| `student1` | 2 — Dashboard, Reports |
+
+An instructor cannot reach the student roster, and no student can
+reach any CRUD screen. These counts are asserted in
+`scripts/app_test.py`, so a regression fails the suite rather than
+going unnoticed.
+
+### 3.5 Role-based access, demonstrated
+
+The sidebar is built per role at runtime, so the difference is visible
+rather than merely asserted:
+
+| Role | Screens visible |
+|---|---|
+| `admin` | 9 — everything |
+| `registrar` | 8 — everything except User Admin |
+| `i.kaya` (instructor) | 6 — Dashboard, Courses, Enrolments, Assignments, Attendance, Reports |
+| `student1` | 2 — Dashboard, Reports |
+
+An instructor cannot reach the student roster, and no student can
+reach any CRUD screen. These counts are asserted in
+`scripts/app_test.py`, so a regression fails the suite rather than
+going unnoticed.
+
+### 3.6 Deployment
 
 **Database — Supabase.** Create a project, then *Project Settings →
 Database → Connection string*. Use the session pooler (port 5432), not
@@ -1018,7 +1061,7 @@ in *Deployments → New app*:
 `.env` is git-ignored and never committed; only `.env.example` is in
 the repository.
 
-### 3.6 Testing
+### 3.7 Testing
 
 Three suites, all executable:
 

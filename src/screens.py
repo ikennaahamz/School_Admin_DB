@@ -47,7 +47,9 @@ def _show_table(df: pd.DataFrame, height: int = 320) -> None:
     if df.empty:
         st.info("No records.")
         return
-    st.dataframe(df, width='stretch', height=height)
+    # hide_index drops the unnamed 0..n column Streamlit would
+    # otherwise show beside every table.
+    st.dataframe(df, width='stretch', height=height, hide_index=True)
 
 
 def _departments() -> pd.DataFrame:
@@ -741,7 +743,7 @@ def reports_screen(user: auth.User) -> None:
             numeric = frame.select_dtypes("number")
             if not numeric.empty:
                 st.markdown("**Summary statistics**")
-                st.dataframe(numeric.describe().T, width='stretch')
+                st.dataframe(numeric.describe().T, width='stretch', hide_index=True)
 
         st.download_button(
             "Download as CSV", frame.to_csv(index=False),
