@@ -273,19 +273,43 @@ WHERE e.status <> 'dropped';
 
 -- -------------------------------------------------------------
 -- Attendance — four sessions per section.
+--
+-- The status is drawn from a weighted distribution rather than from
+-- a modulus of student_id: an expression like (student_id + day) % 7
+-- correlates the outcome with the student, which produced students
+-- marked absent at every single session.
+--
+-- The draw comes from an md5 hash of (student, date) rather than
+-- random(). random() evaluated through a LATERAL subquery was
+-- hoisted into a single one-time Result node, giving every row the
+-- same status. A hash is per-row by construction and still
+-- reproducible: re-running the seed yields identical data.
 -- -------------------------------------------------------------
 INSERT INTO attendance (section_id, student_id, session_date, status)
 SELECT
-    e.section_id,
-    e.student_id,
-    d.session_date,
-    (ARRAY['present','present','present','absent','late','present','excused'])[
-        (e.student_id + EXTRACT(DAY FROM d.session_date)::INT) % 7 + 1
-    ]::attendance_status
-FROM enrollments e
-CROSS JOIN (VALUES (DATE '2025-03-05'), (DATE '2025-03-12'),
-                   (DATE '2025-03-19'), (DATE '2025-03-26')) AS d(session_date)
-WHERE e.status <> 'dropped';
+    t.section_id,
+    t.student_id,
+    t.session_date,
+    CASE
+        WHEN t.bucket <  86 THEN 'present'   -- 86%
+        WHEN t.bucket <  91 THEN 'late'      --  5%
+        WHEN t.bucket <  98 THEN 'absent'    --  7%
+        ELSE                   'excused'    --  2%
+    END::attendance_status
+FROM (
+    SELECT
+        e.section_id,
+        e.student_id,
+        d.session_date,
+        abs(('x' || substr(
+             md5(e.student_id::TEXT || ':' || d.session_date::TEXT), 1, 8
+         ))::bit(32)::BIGINT) % 100 AS bucket
+    FROM enrollments e
+    CROSS JOIN (VALUES (DATE '2025-03-05'), (DATE '2025-03-12'),
+                       (DATE '2025-03-19'), (DATE '2025-03-26')
+              ) AS d(session_date)
+    WHERE e.status <> 'dropped'
+) AS t;
 
 COMMIT;
 

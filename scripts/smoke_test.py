@@ -14,6 +14,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+# Screen labels contain emoji and the Windows console defaults to
+# cp1252, which raises UnicodeEncodeError while printing a failure.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from src import auth, crud, db, reports  # noqa: E402
 
 PASSED = 0
@@ -148,6 +153,17 @@ def _attendance_upsert():
 
 
 def _enrol_cycle(admin):
+    # Withdraw any existing active enrolment first, so the test does
+    # not depend on whatever state a previous run or the output
+    # capture script left the database in. enroll_student correctly
+    # refuses a duplicate, which would otherwise fail the test.
+    existing = db.query_df(
+        "SELECT enrollment_id FROM enrollments "
+        "WHERE student_id=4 AND section_id=3 AND status <> 'dropped'"
+    )
+    for row in existing.to_dict("records"):
+        crud.unenrol(row["enrollment_id"], actor=admin.username)
+
     crud.enrol(student_id=4, section_id=3, actor=admin.username)
     row = db.query_df(
         "SELECT enrollment_id FROM enrollments "

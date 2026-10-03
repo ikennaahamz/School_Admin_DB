@@ -1,0 +1,188 @@
+### QUERY 1 - Enrolment pressure per department
++-------------------------+----------+------------+--------------+----------------------+
+|        dept_name        | students | enrolments | avg_capacity | seat_utilisation_pct |
++-------------------------+----------+------------+--------------+----------------------+
+| Mathematics             |        4 |          4 |         30.0 |                 13.3 |
+| Mechanical Engineering  |        4 |          8 |         32.5 |                 12.3 |
+| Electrical Engineering  |        4 |          8 |         35.0 |                 11.4 |
+| Computer Science        |        5 |         21 |         42.6 |                 10.4 |
+| Psychology              |        4 |          8 |         40.0 |                 10.0 |
+| Business Administration |        2 |          4 |         72.5 |                  2.8 |
++-------------------------+----------+------------+--------------+----------------------+
+(6 rows)
+
+### QUERY 2 - Course difficulty
++-------------+--------+----------+--------+---------------+
+| course_code | graded | avg_mark | spread | vs_school_avg |
++-------------+--------+----------+--------+---------------+
+| PS101       |      4 |    56.75 |   9.43 |        -14.06 |
+| BA110       |      2 |    57.50 |   4.95 |        -13.31 |
+| MA200       |      4 |    59.00 |  22.88 |        -11.81 |
+| ME210       |      4 |    61.13 |  14.69 |         -9.68 |
+| PS340       |      4 |    69.75 |   9.43 |         -1.06 |
+| CS401       |      5 |    70.00 |  22.75 |         -0.81 |
+| BA250       |      2 |    70.50 |   4.95 |         -0.31 |
+| ME320       |      4 |    70.88 |  20.48 |          0.07 |
++-------------+--------+----------+--------+---------------+
+(8 rows)
+
+### QUERY 3 - Student standing, top 5 by GPA
++----------+---------------+------------+------------------------+---------------+--------------+----------+--------------+
+| position | dept_position | student_no |       dept_name        | courses_taken | credit_hours | avg_mark | computed_gpa |
++----------+---------------+------------+------------------------+---------------+--------------+----------+--------------+
+|        1 |             1 | S-00016    | Mathematics            |             1 |            3 |    93.00 |         3.72 |
+|        2 |             1 | S-00006    | Electrical Engineering |             2 |            7 |    90.50 |         3.58 |
+|        3 |             1 | S-00002    | Computer Science       |             3 |           11 |    85.00 |         3.40 |
+|        4 |             2 | S-00021    | Electrical Engineering |             2 |            7 |    85.50 |         3.38 |
+|        5 |             3 | S-00005    | Electrical Engineering |             2 |            7 |    83.50 |         3.30 |
++----------+---------------+------------+------------------------+---------------+--------------+----------+--------------+
+(5 rows)
+
+### QUERY 4 - Teaching load per instructor
++--------------+-------------------------+----------+-----------------+-----------------+
+|  instructor  |        dept_name        | sections | students_taught | utilisation_pct |
++--------------+-------------------------+----------+-----------------+-----------------+
+| Mert Kaya    | Computer Science        |        5 |              21 |             9.8 |
+| Aylin Koc    | Psychology              |        3 |               8 |             6.4 |
+| Burak Ozturk | Mechanical Engineering  |        2 |               8 |            12.3 |
+| Seda Demir   | Electrical Engineering  |        3 |               8 |             7.0 |
+| Cem Sahin    | Mathematics             |        2 |               4 |             6.7 |
+| Deniz Acar   | Business Administration |        3 |               4 |             1.9 |
++--------------+-------------------------+----------+-----------------+-----------------+
+(6 rows)
+
+### QUERY 5 - Grade distribution
++--------------------------+---------+---------------+
+|           band           | records | pct_of_cohort |
++--------------------------+---------+---------------+
+| A  (93-100) excellent    |       4 |           8.5 |
+| B  (87-92)  good         |       6 |          12.8 |
+| C  (80-86)  satisfactory |       6 |          12.8 |
+| D  (70-79)  pass         |      10 |          21.3 |
+| E  (50-69)  weak         |      15 |          31.9 |
+| F  (0-49)   fail         |       6 |          12.8 |
++--------------------------+---------+---------------+
+(6 rows)
+
+### QUERY 6 - Departments beating the school average
++------------------------+----------+----------+------------+
+|       dept_name        | students | dept_avg | school_avg |
++------------------------+----------+----------+------------+
+| Electrical Engineering |        4 |    84.00 |      70.81 |
+| Computer Science       |        5 |    75.33 |      70.81 |
++------------------------+----------+----------+------------+
+(2 rows)
+
+### QUERY 7 - Assignment submission rates
++-------------+-------------------------------+-----------+----------+---------------------+------+
+| course_code |             title             | submitted | enrolled | submission_rate_pct | late |
++-------------+-------------------------------+-----------+----------+---------------------+------+
+| MA200       | Problem Set 1 - Vector Spaces |         4 |        4 |               100.0 |    1 |
+| CS301       | Assignment 1 - ER Modelling   |         5 |        5 |               100.0 |    0 |
+| ME210       | Problem Set 1                 |         4 |        4 |               100.0 |    1 |
+| EE305       | Assignment 1 - GPIO Drivers   |         4 |        4 |               100.0 |    0 |
+| CS302       | Assignment 1 - HTML Forms     |         5 |        5 |               100.0 |    0 |
+| ME320       | Problem Set 2                 |         4 |        4 |               100.0 |    1 |
++-------------+-------------------------------+-----------+----------+---------------------+------+
+(6 rows)
+
+### QUERY 8 - Attendance risk
++------------+--------------+-------------------------+----------+----------+------------------+
+| student_no | student_name |        dept_name        | absences | sessions | absence_rate_pct |
++------------+--------------+-------------------------+----------+----------+------------------+
+| S-00002    | Ayse Kaya    | Computer Science        |        5 |       20 |             25.0 |
+| S-00011    | Kerem Koc    | Business Administration |        2 |        8 |             25.0 |
+| S-00014    | Melis Duman  | Psychology              |        2 |        8 |             25.0 |
+| S-00015    | Onur Tekin   | Psychology              |        2 |        8 |             25.0 |
++------------+--------------+-------------------------+----------+----------+------------------+
+(4 rows)
+
+### PL/pgSQL BLOCK 1 - letter_grade_for, boundary values
++-------+--------+
+| score | letter |
++-------+--------+
+|   100 | AA     |
+|    93 | AA     |
+|    87 | BB     |
+|    80 | CC     |
+|    70 | DD     |
+| 69.99 | FF     |
+|     0 | FF     |
++-------+--------+
+(7 rows)
+
+### PL/pgSQL BLOCK 2 - calculate_student_gpa
++------------+------------+----------+
+| student_id | before_gpa | returned |
++------------+------------+----------+
+|          1 |       0.00 |     3.12 |
+|          2 |       0.00 |     3.40 |
+|          6 |       0.00 |     3.58 |
++------------+------------+----------+
+(3 rows)
+
+### PL/pgSQL BLOCK 3 - section_fill_ratio
++------------+-------------+----------------+----------+----------+
+| section_id | course_code | enrolled_count | capacity | fill_pct |
++------------+-------------+----------------+----------+----------+
+|          1 | CS301       |              5 |       55 |      9.1 |
+|          2 | CS302       |              5 |       40 |     12.5 |
+|          3 | CS401       |              5 |       30 |     16.7 |
+|          4 | EE201       |              4 |       45 |      8.9 |
+|          5 | EE305       |              4 |       25 |     16.0 |
++------------+-------------+----------------+----------+----------+
+(5 rows)
+
+### PL/pgSQL BLOCK 4 - enroll_student, refusal paths
+psql:scripts/capture_output.sql:169: ERROR:  Student 1 is already enrolled in section 1
+CONTEXT:  PL/pgSQL function enroll_student(integer,integer) line 30 at RAISE
+psql:scripts/capture_output.sql:170: ERROR:  Student 999999 does not exist
+CONTEXT:  PL/pgSQL function enroll_student(integer,integer) line 10 at RAISE
+### PL/pgSQL BLOCK 4 - enroll_student, success + counter trigger
+psql:scripts/capture_output.sql:173: NOTICE:  Enrolled student 4 in section 3 (6 of 30 seats)
++------------+----------------+
+| section_id | enrolled_count |
++------------+----------------+
+|          3 |              6 |
++------------+----------------+
+(1 row)
+
+### PL/pgSQL BLOCK 6/7 - grade change: audit, letter, status, GPA
++-------------+--------------+-----------+
+| final_grade | grade_letter |  status   |
++-------------+--------------+-----------+
+|       95.50 | AA           | completed |
++-------------+--------------+-----------+
+(1 row)
+
++-----------+-----------+------------+------------+------------+
+| old_grade | new_grade | old_letter | new_letter | changed_by |
++-----------+-----------+------------+------------+------------+
+|     79.00 |     95.50 | DD         | AA         | i.kaya     |
++-----------+-----------+------------+------------+------------+
+(1 row)
+
++------------+------+
+| student_id | gpa  |
++------------+------+
+|          1 | 3.12 |
++------------+------+
+(1 row)
+
+### PL/pgSQL BLOCK 5 - enrolled_count agrees with reality
++------------+--------+--------+
+| section_id | stored | actual |
++------------+--------+--------+
++------------+--------+--------+
+(0 rows)
+
+### Constraint enforcement (each of these must be refused)
+psql:scripts/capture_output.sql:197: ERROR:  new row for relation "students" violates check constraint "ck_students_gpa"
+DETAIL:  Failing row contains (1, 9, 1, 3, S-00001, undergraduate, 2023, 9.99, 2026-10-03 21:09:49.745384+03).
+psql:scripts/capture_output.sql:199: ERROR:  new row for relation "assignments" violates check constraint "ck_assignments_weight"
+DETAIL:  Failing row contains (16, 1, Bad, 150.00, 100.00, 2026-10-03, 2026-10-03 21:09:49.746378+03).
+psql:scripts/capture_output.sql:201: ERROR:  duplicate key value violates unique constraint "uq_users_username"
+DETAIL:  Key (username)=(admin) already exists.
+psql:scripts/capture_output.sql:202: ERROR:  new row for relation "course_sections" violates check constraint "ck_sections_enrolled"
+DETAIL:  Failing row contains (1, CS301, Database Systems, Spring, 2025, 1, 1, 4, 55, 56).
+### capture complete

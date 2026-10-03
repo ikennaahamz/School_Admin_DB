@@ -1,0 +1,16 @@
+[server]
+# Streamlit Community Cloud needs headless mode.
+headless = true
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+primaryColor = "#1f4e79"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f0f4f8"
+textColor = "#1a1a1a"
+font = "sans serif"
+
+[runner]
+fastReruns = true
