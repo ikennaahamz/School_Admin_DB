@@ -28,3 +28,6 @@ dist/
 # screenshots in the repository. Large binaries are still ignored.
 *.tmp
 *.bak
+# Text dump of the assignment brief produced by an external tool (not
+# part of this project). Present on disk but deliberately untracked.
+docs/assignment.txt
