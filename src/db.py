@@ -23,6 +23,9 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
+from datetime import date, datetime, time
+from decimal import Decimal
+from enum import Enum
 from typing import Any, Iterable
 
 import pandas as pd
@@ -124,21 +127,40 @@ def _friendly_error(exc: psycopg2.Error) -> str:
     return f"Database error — {message} (SQLSTATE {pgcode})"
 
 
+def _coerce(value: Any) -> Any:
+    """Make a psycopg2 value safe for Streamlit's dataframe renderer.
+
+    psycopg2 returns NUMERIC as ``decimal.Decimal`` and dates as
+    ``datetime.date``. Neither survives the Arrow conversion behind
+    ``st.dataframe`` — ArrowTypeError: "Expected bytes, got a
+    'decimal.Decimal' object" — so every query result would render as
+    a broken table.
+
+    Decimal becomes float so the column keeps a numeric dtype, which
+    keeps sorting, ``describe()`` and CSV export working. The exact
+    decimal value still lives in the database; this only affects
+    display.
+    """
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+    if isinstance(value, Enum):
+        return value.value
+    return value
+
+
 def query_df(sql: str, params: Iterable[Any] | None = None,
              actor: str | None = None) -> pd.DataFrame:
-    """Run a SELECT and return a DataFrame.
-
-    All values go out as text. Streamlit's dataframe renderer is
-    better with strings than with mixed NUMERIC/TIMESTAMPTZ objects,
-    and it keeps Decimal precision intact for display.
-    """
+    """Run a SELECT and return a DataFrame with Arrow-safe column types."""
     with get_connection(actor) as conn:
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
             cur.execute(sql, params)
             rows = cur.fetchall()
             if not rows:
                 return pd.DataFrame()
-            return pd.DataFrame(rows)
+            coerced = [{k: _coerce(v) for k, v in row.items()} for row in rows]
+            return pd.DataFrame(coerced)
 
 
 def query_scalar(sql: str, params: Iterable[Any] | None = None,
