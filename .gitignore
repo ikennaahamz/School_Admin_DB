@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Secrets — .env holds the live database password and must never
+# be committed. Only .env.example (the template) belongs in git.
+.env
+*.env
+!.env.example
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Build artefacts
+build/
+dist/
+
+# Screenshots are committed deliberately: the brief requires
+# screenshots in the repository. Large binaries are still ignored.
+*.tmp
+*.bak

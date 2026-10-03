@@ -1,0 +1,8 @@
+# CMPE344 — School Administration System
+# Python 3.10+ required (developed on 3.13)
+
+streamlit==1.65.0
+pandas==3.0.6
+psycopg2-binary==2.9.13
+bcrypt==5.0.0
+python-dotenv==1.2.4
