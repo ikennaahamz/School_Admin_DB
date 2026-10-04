@@ -13,8 +13,8 @@ rather than a URI so the password's trailing '.' needs no encoding.
 import socket
 import sys
 
-REF = "fqhqkbacygrusoychlbk"
-PASSWORD = "Irechukwu7."
+REF = sys.argv[1] if len(sys.argv) > 1 else "fqhqkbacygrusoychlbk"
+PASSWORD = sys.argv[2] if len(sys.argv) > 2 else "Irechukwu7."
 REGIONS = [
     "us-east-1", "us-west-1", "us-west-2",
     "eu-central-1", "eu-west-1", "eu-west-2", "eu-north-1",
@@ -82,9 +82,23 @@ def main() -> int:
         return 0
 
     print("No region accepted the credentials.")
+    print()
+    print("Supabase answers a wrong region, a wrong password and an unknown")
+    print("project with the same message, so the response text matters:")
+    print("  'tenant/user ... not found'  -> the pooler does not know this")
+    print("                                  project. On the free tier that is")
+    print("                                  expected: the connection pooler is")
+    print("                                  a paid-plan feature, and free")
+    print("                                  projects publish IPv6-only direct")
+    print("                                  hostnames.")
+    print("  'password authentication failed' -> the project exists, the")
+    print("                                  password is wrong.")
+    print()
     if reachable:
-        print(f"Reachable but rejected: {', '.join(reachable)}")
-        print("That points to a wrong password rather than a wrong region.")
+        print(f"All {len(reachable)} pooler regions were reachable, so network")
+        print("reachability is not the problem. See apply_all.sql for the")
+        print("IPv4-free route: apply the schema from the dashboard's SQL")
+        print("editor instead.")
     return 1
 
 
