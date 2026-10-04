@@ -103,8 +103,22 @@ def main() -> int:
     os.environ.pop("DATABASE_URL", None)
 
     # DB_TARGET as a secret too, since _connection_string() needs it.
+    # The default is "cloud"; anything other than "local" selects the
+    # cloud database, so the literal legacy value "supabase" must still
+    # resolve to the cloud branch rather than being rejected.
     check("db_target() reads DB_TARGET from st.secrets",
-          db.db_target() == "supabase", f"got {db.db_target()!r}")
+          db.db_target() == "cloud", f"got {db.db_target()!r}")
+
+    st.secrets = FakeSecrets({"DATABASE_URL": dsn, "DB_TARGET": "supabase"})
+    check("legacy DB_TARGET='supabase' still selects the cloud database",
+          db.db_target() == "supabase" and db._connection_string() == dsn,
+          f"db_target() returned {db.db_target()!r}")
+
+    st.secrets = FakeSecrets({"DATABASE_URL": dsn, "DB_TARGET": "CLOUD"})
+    check("DB_TARGET is case-insensitive",
+          db.db_target() == "cloud", f"got {db.db_target()!r}")
+
+    st.secrets = FakeSecrets({"DATABASE_URL": dsn})
 
     # ---- case 2: environment variable (local development) ------
     print("\n-- case 2: environment variable, secrets absent --")

@@ -11,9 +11,16 @@ psycopg2 connections are NOT thread-safe and Streamlit reruns the
 whole script on every interaction. A connection cached in
 ``st.session_state`` would therefore be shared across threads. To avoid
 that, this module opens a short-lived connection per operation and
-closes it in a ``finally`` block. Supabase's pooler absorbs the
-per-connection cost, and correctness matters more than microseconds
-here.
+closes it in a ``finally`` block. The provider's connection pooler
+absorbs the per-connection cost, and correctness matters more than
+microseconds here.
+
+Which database is used is chosen by the ``DB_TARGET`` setting.
+``local`` selects LOCAL_DATABASE_URL for development; anything else,
+including the default, means the cloud database named by
+DATABASE_URL. The project was developed against Supabase and moved to
+Neon because Supabase's free tier publishes IPv6-only hostnames that
+an IPv4-only client cannot reach.
 
 The brief asks for the database connection code to be shown in the
 report; this file is that code.
@@ -78,8 +85,15 @@ def setting(key: str, default: str | None = None) -> str | None:
 
 
 def db_target() -> str:
-    """Which database the app talks to: 'supabase' or 'local'."""
-    return setting("DB_TARGET", "supabase") or "supabase"
+    """Which database the app talks to.
+
+    ``local`` selects LOCAL_DATABASE_URL for development. Any other
+    value, including the default, means the cloud database. The value
+    is compared case-insensitively because the provider changed: the
+    default used to be the literal string ``supabase``, which is
+    retained as an accepted alias but is no longer meaningful.
+    """
+    return (setting("DB_TARGET", "cloud") or "cloud").strip().lower()
 
 
 def _connection_string() -> str:
@@ -98,8 +112,8 @@ def _connection_string() -> str:
         raise DatabaseError(
             "DATABASE_URL is not set. On Streamlit Cloud, add it under "
             "Deploy -> Settings -> Secrets. Locally, copy .env.example "
-            "to .env and paste the connection string from Supabase -> "
-            "Project Settings -> Database."
+            "to .env and paste the connection string from your "
+            "provider's dashboard, or run 'neon link' for Neon."
         )
     return dsn
 

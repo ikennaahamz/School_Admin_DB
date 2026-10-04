@@ -31,3 +31,19 @@ dist/
 # Text dump of the assignment brief produced by an external tool (not
 # part of this project). Present on disk but deliberately untracked.
 docs/assignment.txt
+.neon
+node_modules/
+
+# Neon Functions scaffold. Not part of the deliverable.
+#
+# The course project is a Python/Streamlit application. neon.ts,
+# hello.ts and package.json configure Neon *Functions* (serverless
+# TypeScript) and Neon Auth, neither of which this application uses.
+# They are kept on disk because they are a working deployment, but
+# committing them to a graded repository would misrepresent what the
+# project is. The PostgreSQL database they point at IS used, and is
+# reached through DATABASE_URL alone.
+neon.ts
+hello.ts
+package.json
+package-lock.json

@@ -15,11 +15,12 @@
 | 1 | Design — ERD, DDL, constraints, relational model | **Complete** |
 | 2 | Develop — GUI, ≥5 screens, CRUD over 6 tables | **Complete** (10 screens) |
 | 3 | Query + result display from the client, ≥5 PL/SQL blocks | **Complete** (8 queries, 8 blocks) |
-| 4 | Deploy — cloud database, deployed web app | **Blocked** — needs an IPv4 database |
+| 4 | Deploy — cloud database, deployed web app | **Schema applied to Neon.** App deployment awaits the final `DATABASE_URL` in Streamlit Secrets |
 | 5 | GitHub — public repository with all artefacts | **Complete** |
 
-Four of five phases are done and published. Phase 4 is the only gap, and the
-reason is an external infrastructure constraint, not missing work.
+All five phases are now substantially delivered. The database is live in
+the cloud and verified; what remains for phase 4 is a single secret value
+in the Streamlit Cloud dashboard.
 
 ---
 
@@ -175,69 +176,88 @@ No address associated with hostname
 ```
 
 The IPv4 connection pooler is a paid-plan feature, so a free-tier Supabase
-database has **no IPv4 route at all**. Only the SQL editor works, because it
+database has **no IPv4 route at all**. Only the SQL editor worked, because it
 runs inside Supabase's own network.
 
-Resolution: use a provider with IPv4 on a free tier. The brief permits this
-explicitly — *"Use any cloud based database that you want as Railway, Render,
-Supabase, or others."*
+### Resolved: Neon
 
-| Option | Cost | Note |
-|---|---|---|
-| **Neon** | free, no card | recommended — standard `postgres://` DSN |
-| Railway | trial credit, then card | acceptable |
-| Render | free instance | **avoid** — the free instance expires |
-| Supabase Pro | paid | works if you prefer to stay with Supabase |
+The project was moved to **Neon**, which publishes IPv4 on its free tier.
 
-**No code changes are required.** `src/db.py` speaks plain `psycopg2`, resolves
-its DSN from a single `DATABASE_URL` setting, and the schema is standard
-PostgreSQL 15+ with no Supabase-specific dependency: no ENUM extensions, no
-Supabase Auth, no PostgREST, no RLS.
+| | |
+|---|---|
+| Project | `noisy-river-72623536` |
+| Branch | `production` (`br-weathered-waterfall-b1h862xq`) |
+| Host | `ep-young-pond-b1fihbpb-pooler.c-5.eu-central-1.aws.neon.tech` |
+| Address family | **IPv4** — `3.126.61.111`, `63.180.213.20`, `63.182.37.92` |
+| Server | PostgreSQL 18.6 |
+| Role | `neondb_owner` |
+
+Verified against the live cloud database:
+
+```
+smoke_test.py   34/34    data layer against Neon
+app_test.py     59/59    the full Streamlit app against Neon
+test_neon.py     8/8     DNS, connectivity, schema, seed, PL/pgSQL
+```
+
+The schema was applied by `scripts/apply_to_cloud.py`, which executes
+`supabase/apply_all.sql` over the connection: 13 tables, 6 triggers, 33 users,
+25 students, 18 sections, 57 enrolments, 212 attendance rows, and
+`letter_grade_for(93)` returning `AA` from the deployed function.
+
+**No code changes were required to move provider.** `src/db.py` speaks plain
+`psycopg2`, resolves its DSN from a single `DATABASE_URL` setting, and the
+schema is standard PostgreSQL with no Supabase-specific dependency: no ENUM
+extensions, no Supabase Auth, no PostgREST, no RLS.
+
+### Neon Functions
+
+`neon config init` and `neon deploy` were also run, as requested. They publish
+a serverless TypeScript function:
+
+```
+https://br-weathered-waterfall-b1h862xq-api.compute.c-5.eu-central-1.aws.neon.tech/
+  -> HTTP 200  "Hello from Neon Functions"
+```
+
+This is **not part of the deliverable**. The course project is a Python
+Streamlit application; Neon Functions and Neon Auth are a web-app framework
+this project does not use. `neon.ts`, `hello.ts` and `package.json` are
+git-ignored for that reason. The database they point at *is* used, and is
+reached through `DATABASE_URL` alone.
 
 ---
 
 ## 6. Next steps
 
-### 6.1 Provision an IPv4 database — required
+### 6.1 Point the deployed app at Neon — the only remaining step
 
-1. Sign up at **neon.tech**, create a project, keep the default Postgres.
-2. Copy the connection string, which resembles:
-   `postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require`
-
-### 6.2 Apply the schema — required
-
-Neon → **SQL Editor** → paste `supabase/apply_all.sql` → **Run**.
-
-`apply_all.sql` is the three migrations concatenated, so the schema applies in
-a single paste with no local database connection. Already verified against a
-clean PostgreSQL 17 instance: 144 statements, 13 tables, 8 functions, 6
-triggers, 62 constraints, clean exit.
-
-Expected on completion:
-
-```
- users 33 · students 25 · instructors 6 · sections 18 · enrolments 57
- assignments 15 · submissions 62 · attendance 212
-```
-
-### 6.3 Point the app at it — required
-
-Streamlit Cloud → your app → **Settings → Secrets**. Replace the whole file
-contents with one line — no section header, since the lookup reads top-level
-keys only:
+Streamlit Cloud → your app → **Settings → Secrets**. Replace the file contents
+with one line. No section header, because the lookup reads top-level keys only:
 
 ```toml
-DATABASE_URL = "postgresql://user:password@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"
+DATABASE_URL = "postgresql://neondb_owner:<password>@ep-young-pond-b1fihbpb-pooler.c-5.eu-central-1.aws.neon.tech:5432/neondb?sslmode=require"
 ```
 
 Save, wait ~1 minute, then **Rerun**. Sign in with `admin` / `Passw0rd!`.
 
-### 6.4 Optional hardening
+The value is already in `.env` as `DATABASE_URL`. Copy it rather than
+retyping, and be aware that `.env` also holds `AWS_SECRET_ACCESS_KEY` and the
+Neon Auth JWKS values — copy only the one line.
 
-Run `supabase/hardening.sql` (or its Neon equivalent) to revoke the Data API
-roles. Proven harmless by `scripts/verify_hardening.py`.
+### 6.2 Rotate the Neon database password
 
-### 6.5 Outstanding on the author
+The connection string was printed in full by `scripts/test_neon.py` before a
+regex bug was fixed, so the database password appeared in that output. Rotate
+it in the Neon console, then update both `.env` and the Streamlit secret. The
+old value should be considered exposed.
+
+### 6.3 Optional hardening
+
+Run `supabase/hardening.sql` against Neon, adjusting the role names, to revoke
+Data API access. Proven harmless by `scripts/verify_hardening.py`.
+
+### 6.4 Outstanding on the author
 
 - **Student numbers and names** — three placeholders in `docs/report.md` §1.4.
 - **PL/pgSQL sign-off.** The brief asks for PL/SQL and names Supabase, which
@@ -247,13 +267,21 @@ roles. Proven harmless by `scripts/verify_hardening.py`.
 - **Group members as collaborators** — add them under
   *Settings → Collaborators* so they can push.
 
+### 6.5 Known minor issue
+
+`neon skills` could not run: it requires Node ≥ 22.20.0 and this machine has
+22.15.1. Upgrading Node would affect other projects on the machine, so it was
+left alone. It is optional tooling for AI-assisted Neon work and does not
+affect the application.
+
 ### 6.6 How to read a failure
 
 | Symptom | Meaning | Action |
 |---|---|---|
 | `DATABASE_URL is not set` | secret not saved, or nested under a `[section]` | re-enter as one top-level TOML line |
 | `could not translate host name … to address` | IPv6-only database, or empty DNS | use a provider with IPv4 |
-| `relation "…" does not exist` | schema not applied | run `apply_all.sql` |
+| `relation "…" does not exist` | schema not applied | run `apply_to_cloud.py` |
+| `password authentication failed` | stale password after a rotate | update `.env` and the secret together |
 
 ---
 
