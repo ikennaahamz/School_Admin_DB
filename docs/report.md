@@ -6,7 +6,7 @@
 **Weight:** 15%
 
 **Stack:** PostgreSQL 15 on Supabase · PL/pgSQL · Streamlit (Python)
-**Repository:** `<REPOSITORY_URL>`
+**Repository:** <https://github.com/ikennaahamz/School_Admin_DB> (public)
 
 ---
 
@@ -1091,7 +1091,7 @@ check — a missing column or a render-time exception fails it.
 
 ## 4. GitHub
 
-**Repository:** `<REPOSITORY_URL>`
+**Repository:** <https://github.com/ikennaahamz/School_Admin_DB> (public)
 
 Ensure it is **public** before submitting.
 
@@ -1120,6 +1120,11 @@ the repository. All of it is:
 |---|---|
 | `c081f46` | schema, procedural blocks, seed data, analytical queries, data layer |
 | `b5f55be` | Streamlit application, authentication, both test suites |
+| `629ec58` | ERD, report, README, and captured database output |
+| `3788849` | untrack the external text dump of the assignment brief |
+| `f3421e9` | screenshots captured from the running application |
+| `8a1d76d` | remove the unused screenshot harness |
+| *(this commit)* | record the public repository URL |
 
 ### 4.3 Documentation
 
