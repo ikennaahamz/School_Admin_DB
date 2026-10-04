@@ -183,3 +183,42 @@ is not a syntax check — it catches render failures.
   cannot be parameterised — table names, the procedure name — use an
   explicit allowlist.
 - `.env` is git-ignored. Only `.env.example` belongs in the repository.
+
+### Why Row Level Security is not enabled
+
+A fair question on a Supabase project, and the answer is specific to
+this design.
+
+This application does **not** use Supabase Auth or the Data API. It
+connects straight to Postgres as the table owner and authenticates in
+`src/auth.py` with its own bcrypt hashing. There is no `anon` key in
+`.env` and no reference to PostgREST anywhere in the code.
+
+RLS does not apply to a table's owner. Because every statement here
+runs as the owner, any policy written would be silently bypassed — the
+application would behave identically, while the presence of policies
+would imply an authorisation model that is not actually enforcing
+anything. That is worse than no RLS, because it invites the reader to
+trust a control that is inert.
+
+Enabling RLS *properly* would mean `FORCE ROW LEVEL SECURITY`, a
+dedicated non-owner application role, and per-row policies keyed to a
+session user — which needs Supabase Auth or a `SET LOCAL app.user_id`
+on every connection. That is a redesign, not a checkbox.
+
+**What is genuinely worth closing:** Supabase exposes a Data API at
+`https://<ref>.supabase.co/rest/v1/`, and on a default project the
+`anon` role can read the `public` schema through it, so anyone holding
+the project's anon key could read every user row, password hash and
+grade. Since this application does not use that API, the fix is one
+statement per role, in [`supabase/hardening.sql`](supabase/hardening.sql):
+
+```sql
+REVOKE ALL ON SCHEMA public FROM anon;
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon;
+-- and the same for the authenticated role
+```
+
+Optionally also disable the Data API under **Project Settings → API**.
+`scripts/verify_hardening.py` proves this does not disturb the
+application (9 checks, all passing).
