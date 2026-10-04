@@ -147,6 +147,73 @@ def main() -> int:
           db.setting("DATABASE_URL") == dsn,
           f"got {db.setting('DATABASE_URL')!r}")
 
+    # ---- case 5: paste defects are repaired, not fatal -----------
+    # The deployed build failed with "password authentication failed"
+    # because the secret in the Streamlit dashboard was not the string
+    # that works. The credential cannot be recovered by tidying, but the
+    # debris that commonly travels with a hand-pasted DSN can be, and it
+    # produces the same misleading error when it is not.
+    print("\n-- case 5: paste defects in DATABASE_URL --")
+    good = ("postgresql://neondb_owner:npg_ABC123xyz@ep-young-pond.example"
+            ".aws.neon.tech/neondb?sslmode=require")
+    check("a well-formed DSN is passed through byte-for-byte",
+          db._normalise_dsn(good) == good, f"got {db._normalise_dsn(good)!r}")
+    check("surrounding whitespace is trimmed",
+          db._normalise_dsn(f"  {good}  \n") == good)
+    check("a pasted 'DATABASE_URL=' key is removed",
+          db._normalise_dsn(f"DATABASE_URL={good}") == good)
+    check("a pasted 'DATABASE_URL =' key with spaces is removed",
+          db._normalise_dsn(f"DATABASE_URL = {good}") == good)
+    check("inherited double quotes are removed",
+          db._normalise_dsn(f'"{good}"') == good)
+    check("inherited single quotes are removed",
+          db._normalise_dsn(f"'{good}'") == good)
+    check("a leftover [section] header is removed",
+          db._normalise_dsn(f"[neon]\n{good}") == good)
+    check("a trailing bracket is removed",
+          db._normalise_dsn(f"{good}]") == good)
+    check("a full .env line pasted as one value is repaired",
+          db._normalise_dsn(f'DATABASE_URL="{good}"') == good)
+    check("normalisation is idempotent",
+          db._normalise_dsn(db._normalise_dsn(f'DATABASE_URL="{good}"')) == good)
+
+    # A wrong password must survive untouched. Silently "fixing" it would
+    # hide the real fault behind a connection that appears to work.
+    wrong = good.replace("npg_ABC123xyz", "npg_ABC123xy")
+    check("a wrong password is NOT altered by normalisation",
+          db._normalise_dsn(wrong) == wrong)
+
+    # ---- case 6: fingerprints identify a secret without leaking it --
+    print("\n-- case 6: fingerprint and redaction --")
+    fp = db.dsn_fingerprint(good)
+    check("fingerprint names the host", "ep-young-pond.example" in fp, fp)
+    check("fingerprint names the user", "user=neondb_owner" in fp, fp)
+    check("fingerprint names the database", "db=neondb" in fp, fp)
+    check("fingerprint defaults the port", "port=5432" in fp, fp)
+    check("fingerprint reports the password length",
+          "passlen=13" in fp, fp)
+    check("fingerprint never contains the password",
+          "npg_ABC123xyz" not in fp, fp)
+    check("fingerprint distinguishes a one-character difference",
+          db.dsn_fingerprint(wrong) != fp)
+    check("fingerprint is identical for an identical secret",
+          db.dsn_fingerprint(good) == db.dsn_fingerprint(f'"{good}"'))
+
+    # libpq quotes the password back inside its own error text.
+    leaked = ('invalid dsn: unexpected spaces found in "npg_ABC123xyz", '
+              "use percent-encoded spaces (%20) instead")
+    clean = db._redact(leaked)
+    check("redaction removes a bare npg_ token from driver text",
+          "npg_ABC123xyz" not in clean, clean)
+    uri_leak = ("FATAL: password authentication failed for user \"x\" "
+                "(postgresql://neondb_owner:npg_ABC123xyz@host/db)")
+    check("redaction removes credentials embedded in a URI",
+          "npg_ABC123xyz" not in db._redact(uri_leak),
+          db._redact(uri_leak))
+    check("redaction leaves an ordinary error intact",
+          db._redact("relation \"students\" does not exist")
+          == 'relation "students" does not exist')
+
     # ---- restore the real local configuration --------------------
     # os.environ.pop() above also removed the values load_dotenv()
     # merged in at import time, so re-load rather than assume.

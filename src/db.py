@@ -28,12 +28,15 @@ report; this file is that code.
 
 from __future__ import annotations
 
+import hashlib
 import os
+import re
 from contextlib import contextmanager
 from datetime import date, datetime, time
 from decimal import Decimal
 from enum import Enum
 from typing import Any, Iterable
+from urllib.parse import parse_qsl, urlparse
 
 import pandas as pd
 import psycopg2
@@ -96,6 +99,103 @@ def db_target() -> str:
     return (setting("DB_TARGET", "cloud") or "cloud").strip().lower()
 
 
+def _normalise_dsn(dsn: str) -> str:
+    """Repair the paste defects that survive a trip through a secrets panel.
+
+    A connection string that a human copies by hand picks up debris that
+    no amount of care at the source prevents: surrounding whitespace, the
+    ``DATABASE_URL=`` key when the whole ``.env`` line is pasted into the
+    value, quotes carried over from either file format, or the tail of a
+    ``[section]`` header. None of these are so much the user's mistake as
+    an artefact of the tooling, and each produces a baffling error -- a
+    stray bracket becomes "password authentication failed", which points
+    straight at the credential and away from the real cause.
+
+    The repair is one rule: a PostgreSQL DSN always begins with its
+    scheme, so everything before the first occurrence of a scheme is
+    debris and is discarded. Surrounding quotes, brackets and whitespace
+    are then trimmed. A well-formed DSN passes through byte-for-byte,
+    which is what makes this safe to apply unconditionally.
+
+    Verified by ``scripts/verify_config.py``.
+
+    This deliberately does not attempt to repair a wrong password. No
+    amount of string tidying recovers a character that was never copied,
+    and guessing at one would be dishonest. ``dsn_fingerprint()`` exists
+    to make that case obvious instead of mysterious.
+    """
+    value = dsn.strip()
+
+    # Quotes inherited from .env or .toml syntax, when they wrap the
+    # whole value. Done before the scheme is located, so that
+    # DATABASE_URL="postgres://..." loses both the key and the quotes.
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1].strip()
+
+    start = -1
+    for scheme in ("postgresql://", "postgres://"):
+        found = value.find(scheme)
+        if found > start:
+            start = found
+    if start > 0:
+        value = value[start:]
+
+    # Trailing debris left by the slice above, or pasted on its own.
+    return value.strip().rstrip("\"' \t\r\n]").strip()
+
+
+def dsn_fingerprint(dsn: str) -> str:
+    """Describe a DSN precisely enough to compare, and safely enough to print.
+
+    This exists because "password authentication failed" is the least
+    informative error PostgreSQL emits: it is identical whether the
+    password is wrong, truncated, stale after a rotation, or belongs to a
+    different branch, and it says nothing about which. When a deployment
+    fails from a machine nobody can inspect, the only way to settle it is
+    to compare what the deployed process actually holds against what is
+    known to work.
+
+    So this prints the connection target in full -- host, port, database,
+    user, query parameters -- plus the length and an eight-character
+    SHA-256 prefix of the password. That is enough to prove two strings
+    are identical or to name the difference between them, and it does not
+    disclose the secret: recovering a 16-character credential from a
+    truncated digest of it is not feasible.
+
+    Never print the DSN itself. libpq does exactly that when it rejects
+    a malformed connection string, so driver error text is redacted
+    before it reaches a log or the screen.
+    """
+    try:
+        parsed = urlparse(_normalise_dsn(dsn))
+    except ValueError as exc:  # pragma: no cover - urlparse rarely raises
+        return f"unparseable ({exc})"
+
+    password = parsed.password or ""
+    digest = ""
+    if password:
+        digest = hashlib.sha256(password.encode("utf-8")).hexdigest()[:8]
+    try:
+        port = parsed.port or 5432
+    except ValueError:
+        port = "invalid"
+
+    parts = [
+        f"host={parsed.hostname}",
+        f"port={port}",
+        f"db={parsed.path.lstrip('/') or '(default)'}",
+        f"user={parsed.username or '(none)'}",
+        f"passlen={len(password)}",
+        f"sha256={digest or '(empty)'}",
+    ]
+    if parsed.query:
+        params = "&".join(f"{k}={v}" for k, v in parse_qsl(parsed.query))
+        parts.append(f"query={params}")
+    if password:
+        parts.append("credentials=redacted")
+    return " ".join(parts)
+
+
 def _connection_string() -> str:
     """Resolve the DSN, failing loudly with an actionable message."""
     if db_target() == "local":
@@ -105,7 +205,7 @@ def _connection_string() -> str:
                 "DB_TARGET is 'local' but LOCAL_DATABASE_URL is not set. "
                 "Copy .env.example to .env and fill it in."
             )
-        return dsn
+        return _normalise_dsn(dsn)
 
     dsn = setting("DATABASE_URL")
     if not dsn:
@@ -115,7 +215,23 @@ def _connection_string() -> str:
             "to .env and paste the connection string from your "
             "provider's dashboard, or run 'neon link' for Neon."
         )
-    return dsn
+    return _normalise_dsn(dsn)
+
+
+def _redact(message: str) -> str:
+    """Strip credentials out of driver error text.
+
+    libpq quotes the offending password back inside its own error message
+    when it refuses a malformed connection string::
+
+        invalid dsn: unexpected spaces found in "<the password>"
+
+    so a database error is not automatically safe to log or display. Two
+    passes: credentials sitting in a URI, then any bare ``npg_`` token
+    that escaped unquoted.
+    """
+    message = re.sub(r"(://[^:@\s/]*:)([^@\s]*)@", r"\1<redacted>@", message)
+    return re.sub(r"\bnpg_[A-Za-z0-9]+", "npg_<redacted>", message)
 
 
 @contextmanager
@@ -128,13 +244,22 @@ def get_connection(actor: str | None = None):
     records the person who entered a grade rather than the database
     role that happened to execute the statement.
     """
+    dsn = _connection_string()
     try:
-        conn = psycopg2.connect(_connection_string(), connect_timeout=10)
+        conn = psycopg2.connect(dsn, connect_timeout=10)
     except psycopg2.Error as exc:
-        raise DatabaseError(
-            f"Could not connect to the database. Check DATABASE_URL in your "
-            f".env file.\n\nTechnical detail: {exc}"
-        ) from exc
+        detail = _redact(str(exc).strip())
+        message = (
+            f"Could not connect to the database.\n\n"
+            f"Connection target: {dsn_fingerprint(dsn)}\n\n"
+            f"Technical detail: {detail}\n\n"
+            f"If the deployed app reports this while the same value works "
+            f"locally, the secret in the deployment differs from the one "
+            f"that works. Compare the fingerprint above with "
+            f"'python scripts/dsn_fingerprint.py'; every field, including "
+            f"the sha256, must match."
+        )
+        raise DatabaseError(message) from exc
 
     try:
         with conn.cursor() as cur:
@@ -161,7 +286,7 @@ def _friendly_error(exc: psycopg2.Error) -> str:
     instructor wants to see next to the rule that was enforced.
     """
     pgcode = getattr(exc, "pgcode", None)
-    message = str(exc).strip().splitlines()[0]
+    message = _redact(str(exc).strip().splitlines()[0])
 
     if pgcode == "23505":
         return f"Duplicate value — {message} (SQLSTATE 23505: unique_violation)"
