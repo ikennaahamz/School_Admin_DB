@@ -31,6 +31,10 @@ dist/
 # Text dump of the assignment brief produced by an external tool (not
 # part of this project). Present on disk but deliberately untracked.
 docs/assignment.txt
+
+# Session handoff brief. Written for the benefit of another agent, not
+# part of the deliverable, and it describes unfinished work.
+HANDOFF.md
 .neon
 node_modules/
 
