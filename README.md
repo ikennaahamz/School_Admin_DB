@@ -173,10 +173,35 @@ def setting(key: str, default: str | None = None) -> str | None:
 used by the test scripts, which run with no Streamlit runtime and no
 secrets file at all.
 
-**Note on the Supabase free tier:** its database hostnames are
-IPv6-only. Streamlit Cloud runs on AWS with dual-stack egress, so the
-deployed app connects normally. A *local* connection does not — see
-["Applying the schema with no IPv4"](#applying-the-schema-with-no-ipv4-supabase-free-tier).
+**Note on the Supabase free tier — this bit us.** Its database
+hostnames publish **IPv6 only**: `db.<ref>.supabase.co` has an AAAA
+record and no A record, confirmed against Cloudflare, Google and
+Quad9. `psql`, `psycopg2` and the Streamlit Cloud container all resolve
+addresses with `getaddrinfo`, which returns nothing usable when the
+only record is AAAA and the client has no IPv6. The result is
+`could not translate host name ... to address: No address associated
+with hostname` — which reads like a typo in the connection string and is
+not one.
+
+The IPv4 connection pooler is a paid-plan feature, so there is no IPv4
+route to a free-tier Supabase database. IPv4 requires either the Pro
+plan or a different provider:
+
+| Option | Cost | Notes |
+|---|---|---|
+| **Neon** | free, no card | Standard `postgres://` DSN. Recommended. |
+| Railway | trial credit, then card | Fine if you already have an account |
+| Render | free instance | The free Postgres instance expires — do not use for a graded deadline |
+| Supabase Pro | paid | Works, if you would rather stay with Supabase |
+
+Switching provider changes nothing in the code. `src/db.py` speaks plain
+`psycopg2` and reads the DSN from `DATABASE_URL`, and the schema is
+standard PostgreSQL 15+ with no Supabase-specific dependency. Only the
+secret's value changes; re-run `apply_all.sql` on the new database.
+
+See ["Applying the schema with no IPv4"](#applying-the-schema-with-no-ipv4-supabase-free-tier)
+for the dashboard route, which still works for applying the schema on
+Supabase itself.
 
 ## Screens
 

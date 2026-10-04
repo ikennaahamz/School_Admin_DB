@@ -1105,36 +1105,69 @@ deployed case where the environment is empty.
 
 `.env` remains git-ignored, and only `.env.example` is committed.
 
-#### A note on the Supabase free tier and IPv6
+#### A note on the Supabase free tier and IPv6 — a real obstacle
 
 Supabase free-tier projects publish **IPv6-only** database hostnames:
 `db.<ref>.supabase.co` carries an AAAA record and no A record. This was
-observed directly rather than assumed — DNS lookups against Google's
-public resolver confirm the missing A record.
+confirmed against Cloudflare, Google and Quad9, and against two
+separate project refs.
 
-The consequence is narrow, and it is worth being precise about:
+`psql`, `psycopg2` and the Streamlit Cloud container all resolve
+addresses through `getaddrinfo`. When the only DNS record is AAAA and
+the client has no IPv6, that call returns nothing usable, and the error
+is:
 
-| What runs | Where | IPv6 needed? |
+```
+could not translate host name "db.<ref>.supabase.co" to address:
+No address associated with hostname
+```
+
+This was first observed locally and then reproduced in the deployed
+application, which settles the question rather than leaving it to
+assumption:
+
+| Client | IPv6? | Outcome |
 |---|---|---|
-| Schema and seed | Supabase SQL Editor | No — runs inside Supabase's network |
-| The application | Streamlit Community Cloud | No — AWS egress is dual-stack |
-| Local `psql` / local `streamlit run` | This machine | **Yes** — IPv4-only, so it fails |
+| Local machine | no | fails to resolve |
+| Streamlit Cloud | no | fails to resolve |
+| Supabase SQL Editor | yes — runs inside Supabase | works |
 
-Two responses were implemented rather than paying for Pro:
+The IPv4 connection pooler is a paid-plan feature, so a free-tier
+Supabase database has **no IPv4 route at all**. IPv4 requires the Pro
+plan or a different provider. An earlier draft of this report claimed
+that Streamlit Cloud's dual-stack egress would make the deployment
+connect normally; the deployment proved that wrong, and the claim has
+been corrected.
 
-1. **`supabase/apply_all.sql`** — the three migrations concatenated, so
-   the schema can be applied from the dashboard in a single paste with
-   no database connection from the development machine. Verified against
-   a clean PostgreSQL 17 instance: 144 statements, 13 tables, 8
+**Decision: PostgreSQL was moved to a free IPv4 provider** (Neon, or
+Railway). The brief permits this explicitly — *"Use any cloud based
+database that you want as Railway, Render, Supabase, or others"*.
+
+Nothing in the application changes. `src/db.py` speaks plain `psycopg2`,
+resolves its DSN from a single `DATABASE_URL` setting, and the schema
+is standard PostgreSQL 15+ with no Supabase-specific dependency:
+
+- no `ENUM` or PL/pgSQL feature that Supabase extends
+- no Supabase Auth — authentication is `src/auth.py`'s own bcrypt
+- no reference to PostgREST, the anon key, or the Data API
+- no Row Level Security, which would not apply to the table owner
+  anyway
+
+Only the secret's value changes, and `apply_all.sql` is re-run against
+the new instance.
+
+Two workarounds were built before the move was necessary, and both
+remain useful:
+
+1. **`supabase/apply_all.sql`** — the three migrations concatenated,
+   so the schema can be applied from a dashboard SQL editor with no
+   database connection from the development machine. Verified against a
+   clean PostgreSQL 17 instance: 144 statements, 13 tables, 8
    functions, 6 triggers, 62 constraints.
 
-2. **`scripts/probe_supabase.py`** — identifies the correct pooler
-   region by attempting authentication across the known regions and
-   reporting which one succeeds. The pooler hostnames publish IPv4
-   records, so this restores local connectivity if it is ever needed.
-
-Neither changes the application code. Only the `DATABASE_URL` host
-would differ.
+2. **`scripts/probe_supabase.py`** — identifies a project's pooler
+   region by attempting authentication across the known regions. Useful
+   when a project genuinely is reachable.
 
 ### 3.7 Testing
 
