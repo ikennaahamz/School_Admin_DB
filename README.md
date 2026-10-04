@@ -122,6 +122,62 @@ docs/
   report.md                     the project report
 ```
 
+## Deploying to Streamlit Community Cloud
+
+Push the repository, then use **Deploy an app**:
+
+| Field | Value |
+|---|---|
+| Repository | `ikennaahamz/School_Admin_DB` |
+| Branch | `main` |
+| Main file path | `app.py` |
+| App URL | optional |
+
+Then open **Advanced Settings → Secrets** and add:
+
+```toml
+DATABASE_URL = "postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require"
+```
+
+Redeploy after saving the secret.
+
+**Secrets must be read from `st.secrets`.** Streamlit Cloud injects
+deployment secrets there, *not* into the process environment, so a
+module that reads only `os.getenv` will report "DATABASE_URL is not
+set" on a deployed build while the variable is plainly configured.
+`src/db.py` reads `st.secrets` first, then the environment, then `.env`,
+in that order — `scripts/verify_config.py` asserts all four cases.
+
+The order matters: secrets before environment. A stale
+`DATABASE_URL` exported in the shell should not shadow the value
+configured in the deployment.
+
+### Configuration lookup, in one function
+
+```python
+def setting(key: str, default: str | None = None) -> str | None:
+    try:
+        import streamlit as st
+        secrets = st.secrets
+        value = secrets.get(key) if hasattr(secrets, "get") else None
+        if value is None:
+            value = getattr(secrets, key, None)
+        if value:
+            return str(value)
+    except Exception:  # noqa: BLE001 - absent secrets must not be fatal
+        pass
+    return os.getenv(key, default)
+```
+
+`st.secrets` is imported lazily and guarded because this module is also
+used by the test scripts, which run with no Streamlit runtime and no
+secrets file at all.
+
+**Note on the Supabase free tier:** its database hostnames are
+IPv6-only. Streamlit Cloud runs on AWS with dual-stack egress, so the
+deployed app connects normally. A *local* connection does not — see
+["Applying the schema with no IPv4"](#applying-the-schema-with-no-ipv4-supabase-free-tier).
+
 ## Screens
 
 | # | Screen | Purpose | Roles |

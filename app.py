@@ -260,8 +260,12 @@ def render_db_status() -> None:
         st.session_state["db_ok"], st.session_state["db_version"] = db.ping()
     if not st.session_state["db_ok"]:
         st.error(
-            "Not connected to the database. Copy `.env.example` to `.env` "
-            "and set `DATABASE_URL` to your Supabase connection string.\n\n"
+            "Not connected to the database.\n\n"
+            "On Streamlit Cloud: **Deploy → Settings → Secrets**, then add "
+            "a secret named `DATABASE_URL` with your connection string, "
+            "and redeploy.\n\n"
+            "Locally: copy `.env.example` to `.env` and set "
+            "`DATABASE_URL`.\n\n"
             f"`{st.session_state['db_version']}`"
         )
         st.stop()

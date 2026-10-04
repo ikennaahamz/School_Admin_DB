@@ -35,19 +35,57 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Which database the app talks to. "supabase" in production,
-# "local" while developing against a local PostgreSQL instance.
-DB_TARGET = os.getenv("DB_TARGET", "supabase")
-
 
 class DatabaseError(RuntimeError):
     """Raised for failures the UI should show the user as a message."""
 
 
+def setting(key: str, default: str | None = None) -> str | None:
+    """Read a configuration value from wherever Streamlit put it.
+
+    Three sources, in priority order:
+
+    1. ``st.secrets`` — Streamlit Community Cloud injects deployment
+       secrets here, and a local ``.streamlit/secrets.toml`` also lands
+       here. This is the source that matters in production.
+    2. A normal environment variable.
+    3. A ``.env`` file, loaded by ``load_dotenv()`` above.
+
+    Reading only ``os.getenv`` was a real deployment bug: the value set
+    under Streamlit Cloud's Secrets panel never reached the app, so a
+    deployed build reported "DATABASE_URL is not set" while the variable
+    was plainly configured. Both must be consulted.
+
+    ``st.secrets`` is imported lazily and guarded, because this module
+    is also used by scripts/ and smoke tests that run with no Streamlit
+    runtime and no secrets file.
+    """
+    try:
+        import streamlit as st
+
+        secrets = st.secrets
+        # .get() raises if secrets.toml is absent on local disk, and
+        # attribute access raises for an unknown key on Cloud.
+        value = secrets.get(key) if hasattr(secrets, "get") else None
+        if value is None:
+            value = getattr(secrets, key, None)
+        if value:
+            return str(value)
+    except Exception:  # noqa: BLE001 - absent secrets must not be fatal
+        pass
+
+    return os.getenv(key, default)
+
+
+def db_target() -> str:
+    """Which database the app talks to: 'supabase' or 'local'."""
+    return setting("DB_TARGET", "supabase") or "supabase"
+
+
 def _connection_string() -> str:
-    """Resolve the DSN from the environment, failing loudly if absent."""
-    if DB_TARGET == "local":
-        dsn = os.getenv("LOCAL_DATABASE_URL")
+    """Resolve the DSN, failing loudly with an actionable message."""
+    if db_target() == "local":
+        dsn = setting("LOCAL_DATABASE_URL")
         if not dsn:
             raise DatabaseError(
                 "DB_TARGET is 'local' but LOCAL_DATABASE_URL is not set. "
@@ -55,11 +93,13 @@ def _connection_string() -> str:
             )
         return dsn
 
-    dsn = os.getenv("DATABASE_URL")
+    dsn = setting("DATABASE_URL")
     if not dsn:
         raise DatabaseError(
-            "DATABASE_URL is not set. Copy .env.example to .env and paste "
-            "the connection string from Supabase -> Project Settings -> Database."
+            "DATABASE_URL is not set. On Streamlit Cloud, add it under "
+            "Deploy -> Settings -> Secrets. Locally, copy .env.example "
+            "to .env and paste the connection string from Supabase -> "
+            "Project Settings -> Database."
         )
     return dsn
 

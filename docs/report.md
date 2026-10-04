@@ -1051,15 +1051,59 @@ the transaction pooler (6543), which does not support the prepared
 statements psycopg2 issues.
 
 **Application — Streamlit Community Cloud.** Push the repository, then
-in *Deployments → New app*:
+use **Deploy an app**:
 
-- **Repository:** this repository
-- **Branch / main file:** `main` / `app.py`
-- **Requirements:** `requirements.txt`
-- **Secrets:** add `DATABASE_URL` from the Supabase connection string
+| Field | Value |
+|---|---|
+| Repository | `ikennaahamz/School_Admin_DB` |
+| Branch | `main` |
+| Main file path | `app.py` |
+| App URL | optional |
 
-`.env` is git-ignored and never committed; only `.env.example` is in
-the repository.
+Then **Advanced Settings → Secrets**:
+
+```toml
+DATABASE_URL = "postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require"
+```
+
+Redeploy after saving the secret.
+
+#### Reading secrets correctly
+
+Streamlit Community Cloud injects deployment secrets through
+`st.secrets`, **not** into the process environment. An earlier version
+of `src/db.py` read only `os.getenv`, so the first deployment reported
+*"DATABASE_URL is not set"* while the secret was plainly configured
+above it on the dashboard. `src/db.py` now resolves configuration from
+three sources in priority order:
+
+1. `st.secrets` — Cloud, and a local `.streamlit/secrets.toml`
+2. the process environment
+3. a `.env` file
+
+```python
+def setting(key: str, default: str | None = None) -> str | None:
+    try:
+        import streamlit as st
+        secrets = st.secrets
+        value = secrets.get(key) if hasattr(secrets, "get") else None
+        if value is None:
+            value = getattr(secrets, key, None)
+        if value:
+            return str(value)
+    except Exception:  # noqa: BLE001 - absent secrets must not be fatal
+        pass
+    return os.getenv(key, default)
+```
+
+Secrets are consulted *before* the environment so that a stale
+`DATABASE_URL` exported in a shell cannot shadow the deployed value.
+`st.secrets` is imported lazily and guarded because the test scripts
+run with no Streamlit runtime and no secrets file.
+`scripts/verify_config.py` asserts all four cases, including the
+deployed case where the environment is empty.
+
+`.env` remains git-ignored, and only `.env.example` is committed.
 
 #### A note on the Supabase free tier and IPv6
 
