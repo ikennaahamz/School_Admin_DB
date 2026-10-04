@@ -6,6 +6,10 @@ A PostgreSQL database and Streamlit web application for university
 student records: enrolment, grading, attendance, role-based
 authentication, and management reporting.
 
+> **Project status, next steps and the one outstanding blocker**
+> (IPv6-only Supabase, and why the deployment needs an IPv4 database):
+> see **[docs/SUMMARY.md](docs/SUMMARY.md)**.
+
 | Layer | Technology |
 |---|---|
 | Database | PostgreSQL 15 on **Supabase** |
