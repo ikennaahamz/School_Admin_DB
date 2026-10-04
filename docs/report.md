@@ -1061,6 +1061,37 @@ in *Deployments → New app*:
 `.env` is git-ignored and never committed; only `.env.example` is in
 the repository.
 
+#### A note on the Supabase free tier and IPv6
+
+Supabase free-tier projects publish **IPv6-only** database hostnames:
+`db.<ref>.supabase.co` carries an AAAA record and no A record. This was
+observed directly rather than assumed — DNS lookups against Google's
+public resolver confirm the missing A record.
+
+The consequence is narrow, and it is worth being precise about:
+
+| What runs | Where | IPv6 needed? |
+|---|---|---|
+| Schema and seed | Supabase SQL Editor | No — runs inside Supabase's network |
+| The application | Streamlit Community Cloud | No — AWS egress is dual-stack |
+| Local `psql` / local `streamlit run` | This machine | **Yes** — IPv4-only, so it fails |
+
+Two responses were implemented rather than paying for Pro:
+
+1. **`supabase/apply_all.sql`** — the three migrations concatenated, so
+   the schema can be applied from the dashboard in a single paste with
+   no database connection from the development machine. Verified against
+   a clean PostgreSQL 17 instance: 144 statements, 13 tables, 8
+   functions, 6 triggers, 62 constraints.
+
+2. **`scripts/probe_supabase.py`** — identifies the correct pooler
+   region by attempting authentication across the known regions and
+   reporting which one succeeds. The pooler hostnames publish IPv4
+   records, so this restores local connectivity if it is ever needed.
+
+Neither changes the application code. Only the `DATABASE_URL` host
+would differ.
+
 ### 3.7 Testing
 
 Three suites, all executable:

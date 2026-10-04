@@ -72,6 +72,32 @@ Then confirm everything works:
 psql "$DATABASE_URL" -f supabase/migrations/verify_plpgsql.sql
 ```
 
+### Applying the schema with no IPv4 (Supabase free tier)
+
+The Supabase **free tier publishes IPv6-only hostnames**.
+`db.<ref>.supabase.co` has an AAAA record and no A record, so on an
+IPv4-only network `psql` cannot resolve it at all. Upgrading to Pro is
+one way to get IPv4; it is not necessary.
+
+**Preferred — the dashboard SQL editor.** Paste
+[`supabase/apply_all.sql`](supabase/apply_all.sql), the three
+migrations concatenated, into **SQL Editor → Run**. It executes inside
+Supabase's own network, so no IPv4 is required. Regenerate it whenever a
+migration changes:
+
+```bash
+python scripts/build_single_sql.py
+```
+
+**Alternative — the pooler.** `aws-0-<region>.pooler.supabase.com`
+publishes IPv4 records. Its username is `postgres.<project_ref>` rather
+than `postgres`. `scripts/probe_supabase.py` identifies the correct
+region by trying them and reporting which one authenticates.
+
+Only *local* connections are affected. Streamlit Community Cloud reaches
+the database over IPv6 from AWS, so the free tier is sufficient for the
+running application.
+
 ## Repository layout
 
 ```
