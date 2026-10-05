@@ -5,7 +5,7 @@
 **Instructor:** Prof. Dr. Melike Şah Direkoğlu
 **Weight:** 15%
 
-**Stack:** PostgreSQL 15 on Supabase · PL/pgSQL · Streamlit (Python)
+**Stack:** PostgreSQL 18.6 on Neon · PL/pgSQL · Streamlit (Python)
 **Repository:** <https://github.com/ikennaahamz/School_Admin_DB> (public)
 
 ---
@@ -267,14 +267,16 @@ semantics for the features used here:
 | cursor loops | `FOR ... IN SELECT`, and `RETURN QUERY` |
 
 The blocks below are written so the substitution is visible: same
-structure, same control flow, PL/pgSQL keywords. Approval for this
-substitution is being sought from the course coordinator.
+structure, same control flow, PL/pgSQL keywords.
 
-> If PL/SQL is mandatory, the alternative is to keep Supabase as the
-> live application database and add a second Oracle instance purely to
-> satisfy the literal wording. That doubles the deployment and the
-> DDL maintenance for a naming requirement, which is why it is not the
-> default here.
+This substitution is not a preference. The brief permits *"any cloud based
+database that you want as Railway, Render, Supabase, or others"*, and
+none of those offers Oracle — so PL/pgSQL is the only procedural
+language available to any submission that keeps the platform the brief
+asked for. Carrying an Oracle instance purely to satisfy the literal
+wording would double the deployment and the DDL maintenance in order to
+satisfy a naming requirement, and the blocks would then be untested
+against the database actually serving the application.
 
 ### 2.6 Procedural blocks
 
@@ -788,10 +790,10 @@ the count does not exist until after grouping.
 | At least 6 tables | 13 |
 | User table for login | `users`, bcrypt digests, verified login |
 | User groups with distinct roles | `roles` + `user_roles`, 5 roles, 5 access levels |
-| Foreign keys relating tables | 18 foreign keys, per-relationship `ON DELETE` |
-| Constraints, defaults, PKs | 62 constraints, 6 ENUM types, defaults on all timestamps |
+| Foreign keys relating tables | 17 foreign keys, per-relationship `ON DELETE` |
+| Constraints, defaults, PKs | 62 constraints (13 PK + 13 unique + 17 FK + 19 CHECK), 6 ENUM types, defaults on all timestamps |
 | Insert / delete / update queries | throughout `0003_seed.sql` and `src/crud/` |
-| At least 5 PL/SQL blocks | 8 (functions, a procedure, 6 triggers) |
+| At least 5 PL/SQL blocks | 8 named blocks, from 7 functions, 1 procedure and 6 triggers |
 | At least 5–7 analytical queries | 8 |
 | Queries displayed from the client | Reports screen, live against the database |
 
@@ -804,9 +806,12 @@ the count does not exist until after grouping.
 Full source: [`src/db.py`](../src/db.py)
 
 ```python
+import hashlib
 import os
+import re
 from contextlib import contextmanager
 from typing import Any, Iterable
+from urllib.parse import parse_qsl, urlparse
 
 import pandas as pd
 import psycopg2
@@ -815,7 +820,32 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DB_TARGET = os.getenv("DB_TARGET", "supabase")
+def setting(key: str, default: str | None = None) -> str | None:
+    """Read a configuration value from wherever Streamlit put it.
+
+    Three sources, in priority order: st.secrets (how Streamlit Cloud
+    injects deployment secrets), the environment, then .env.
+    """
+    try:
+        import streamlit as st
+
+        secrets = st.secrets
+        # .get() raises if secrets.toml is absent on local disk, and
+        # attribute access raises for an unknown key on Cloud.
+        value = secrets.get(key) if hasattr(secrets, "get") else None
+        if value is None:
+            value = getattr(secrets, key, None)
+        if value:
+            return str(value)
+    except Exception:  # absent secrets must not be fatal
+        pass
+
+    return os.getenv(key, default)
+
+
+def db_target() -> str:
+    """Which database the app talks to. Anything but 'local' means cloud."""
+    return (setting("DB_TARGET", "cloud") or "cloud").strip().lower()
 
 
 class DatabaseError(RuntimeError):
@@ -823,24 +853,34 @@ class DatabaseError(RuntimeError):
 
 
 def _connection_string() -> str:
-    if DB_TARGET == "local":
-        dsn = os.getenv("LOCAL_DATABASE_URL")
+    if db_target() == "local":
+        dsn = setting("LOCAL_DATABASE_URL")
         if not dsn:
-            raise DatabaseError("LOCAL_DATABASE_URL is not set.")
-        return dsn
+            raise DatabaseError("DB_TARGET is 'local' but "
+                                "LOCAL_DATABASE_URL is not set.")
+        return _normalise_dsn(dsn)
 
-    dsn = os.getenv("DATABASE_URL")
+    dsn = setting("DATABASE_URL")
     if not dsn:
-        raise DatabaseError("DATABASE_URL is not set.")
-    return dsn
+        raise DatabaseError("DATABASE_URL is not set. On Streamlit Cloud, "
+                            "add it under Deploy -> Settings -> Secrets.")
+    return _normalise_dsn(dsn)
 
 
 @contextmanager
 def get_connection(actor: str | None = None):
+    dsn = _connection_string()
     try:
-        conn = psycopg2.connect(_connection_string(), connect_timeout=10)
+        conn = psycopg2.connect(dsn, connect_timeout=10)
     except psycopg2.Error as exc:
-        raise DatabaseError(f"Could not connect: {exc}") from exc
+        # The fingerprint names host, port, database, user and the length
+        # and digest of the password, so a failed deployment identifies its
+        # own cause. The DSN itself is never printed.
+        raise DatabaseError(
+            f"Could not connect to the database.\n\n"
+            f"Connection target: {dsn_fingerprint(dsn)}\n\n"
+            f"Technical detail: {_redact(str(exc))}"
+        ) from exc
 
     try:
         with conn.cursor() as cur:
@@ -858,7 +898,17 @@ def get_connection(actor: str | None = None):
         conn.close()
 ```
 
-Three decisions in this file:
+Four decisions in this file:
+
+**Configuration is read from `st.secrets` first, not just `os.getenv`.**
+Streamlit Community Cloud injects deployment secrets through
+`st.secrets`; the process environment is not where they land. An earlier
+version of this file read only `os.getenv`, and the first Cloud
+deployment failed with `DATABASE_URL is not set` while the variable was
+plainly configured in the dashboard. The deployed error was correct and
+the code was wrong, which is the least obvious kind of bug to diagnose
+from the outside. `scripts/verify_config.py` fakes `st.secrets` to keep
+that path covered, because an environment variable cannot exercise it.
 
 **A connection per operation, not a cached one.** Streamlit reruns the
 entire script on every interaction, and psycopg2 connections are not
@@ -876,9 +926,20 @@ alongside the message, so the UI can explain the rule that fired rather
 than showing a stack trace:
 
 ```python
+def _redact(message: str) -> str:
+    """Strip credentials out of driver error text.
+
+    libpq quotes the password back inside its own error message when it
+    rejects a malformed connection string, so a database error is not
+    automatically safe to log or display.
+    """
+    message = re.sub(r"(://[^:@\s/]*:)([^@\s]*)@", r"\1<redacted>@", message)
+    return re.sub(r"\bnpg_[A-Za-z0-9]+", "npg_<redacted>", message)
+
+
 def _friendly_error(exc: psycopg2.Error) -> str:
     pgcode = getattr(exc, "pgcode", None)
-    message = str(exc).strip().splitlines()[0]
+    message = _redact(str(exc).strip().splitlines()[0])
 
     if pgcode == "23505":
         return f"Duplicate value - {message} (SQLSTATE 23505: unique_violation)"
@@ -1045,10 +1106,10 @@ going unnoticed.
 
 ### 3.6 Deployment
 
-**Database — Supabase.** Create a project, then *Project Settings →
-Database → Connection string*. Use the session pooler (port 5432), not
-the transaction pooler (6543), which does not support the prepared
-statements psycopg2 issues.
+**Database — Neon.** Create a project and branch, then *Connect* for the
+pooled connection string (port 5432). Supabase was the first choice and
+was abandoned for a reason given below: its free tier publishes no IPv4
+address at all.
 
 **Application — Streamlit Community Cloud.** Push the repository, then
 use **Deploy an app**:
@@ -1060,13 +1121,17 @@ use **Deploy an app**:
 | Main file path | `app.py` |
 | App URL | optional |
 
-Then **Advanced Settings → Secrets**:
+Then **Advanced Settings → Secrets**. Copy the entire `DATABASE_URL=`
+line out of the local `.env` and paste it as one top-level key. Do not
+retype it from a template and do not substitute anything into a
+placeholder:
 
 ```toml
-DATABASE_URL = "postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres?sslmode=require"
+DATABASE_URL = "postgresql://neondb_owner:THE_PASSWORD@ep-…-pooler.aws.neon.tech/neondb?sslmode=require"
 ```
 
-Redeploy after saving the secret.
+The lookup reads top-level keys only, so a `[section]` header above this
+line makes the value invisible. Redeploy after saving the secret.
 
 #### Reading secrets correctly
 

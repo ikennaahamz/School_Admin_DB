@@ -9,7 +9,13 @@
 -- triggers). Approval from the course coordinator is being
 -- sought; see docs/report.md.
 --
--- Seven blocks: 2 functions, 1 procedure, 4 triggers.
+-- Eight blocks: 4 functions, 1 procedure, 3 triggers. The trigger
+-- blocks are 5, 6 and 7; blocks 1, 2, 3 and 8 are plain functions.
+--
+-- Counting each trigger's function as a function of its own, that is
+-- 7 functions and 1 procedure. This line previously said "Seven
+-- blocks: 2 functions, 1 procedure, 4 triggers", which matched
+-- neither the number of blocks nor the breakdown.
 -- =============================================================
 
 -- -------------------------------------------------------------
