@@ -302,8 +302,10 @@ def write_port_map(module_stats: list[dict], test_stats: list[dict],
     add(f"- SQL statements exported: **{sql_total}**")
     add(f"- Python lines to port: **{sum(m['loc'] for m in module_stats)}**")
     add("")
-    add("Read `handoff` section 7 (landmines) before starting. Section 8 is")
-    add("the acceptance checklist. Section 4 holds the four blocking decisions.")
+    add("Read `HANDOFF-JS.md` in the repository root before starting:")
+    add("section 4 holds the four blocking decisions, section 7 the")
+    add("landmines, section 8 the acceptance checklist. That file is")
+    add("git-ignored, so it will not travel with a clone.")
     add("")
 
     add("## Module map")

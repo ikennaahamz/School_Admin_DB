@@ -35,6 +35,13 @@ docs/assignment.txt
 # Session handoff brief. Written for the benefit of another agent, not
 # part of the deliverable, and it describes unfinished work.
 HANDOFF.md
+
+# The JavaScript-rewrite brief, same reasoning: it is unfinished-work
+# context for another agent, not coursework. port/PORT_MAP.md points at
+# this file, so it belongs beside the Python app rather than in a temp
+# directory that OS cleanup may empty. Copy it into a new project folder
+# before starting the rewrite.
+HANDOFF-JS.md
 .neon
 node_modules/
 
