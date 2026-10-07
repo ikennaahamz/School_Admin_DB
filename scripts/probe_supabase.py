@@ -10,11 +10,54 @@ regions fail fast. Written with keyword/value connection parameters
 rather than a URI so the password's trailing '.' needs no encoding.
 """
 
+import os
+import re
 import socket
 import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 REF = sys.argv[1] if len(sys.argv) > 1 else "fqhqkbacygrusoychlbk"
-PASSWORD = sys.argv[2] if len(sys.argv) > 2 else "Irechukwu7."
+
+
+def _password_from_env_file() -> str | None:
+    """Read the password out of the git-ignored .env, or None.
+
+    This used to carry a literal password as a fallback, which put a live
+    credential into a public repository. The credential has since been
+    rotated; what matters now is that no secret can be committed here
+    again.
+    """
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return None
+    for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        m = re.match(r"^\s*DATABASE_URL\s*=\s*(.+)$", line)
+        if not m:
+            continue
+        pw = re.search(r"://[^:]+:([^@]+)@", m.group(1).strip().strip("\"'"))
+        if pw:
+            return pw.group(1)
+    return None
+
+
+# Argument order preserved: the region first, the password second. The
+# fallback is the environment, and there is no third option -- a script
+# that runs with no credential is better than one that runs with a
+# committed one.
+PASSWORD = (
+    sys.argv[2]
+    if len(sys.argv) > 2
+    else os.environ.get("PGPASSWORD") or _password_from_env_file()
+)
+if not PASSWORD:
+    raise SystemExit(
+        "No password available. Pass it as the second argument, set "
+        "PGPASSWORD, or put DATABASE_URL in .env (which is git-ignored)."
+    )
+
 REGIONS = [
     "us-east-1", "us-west-1", "us-west-2",
     "eu-central-1", "eu-west-1", "eu-west-2", "eu-north-1",

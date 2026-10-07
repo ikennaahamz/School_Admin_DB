@@ -17,6 +17,7 @@ way the application must be unaffected, which is what this asserts.
 """
 
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -29,6 +30,29 @@ if hasattr(sys.stdout, "reconfigure"):
 DB = "school_hardening_test"
 PSQL = r"C:\Program Files\PostgreSQL\17\bin\psql.exe"
 
+
+def _password_from_env_file() -> str | None:
+    """Read the password out of the git-ignored .env.
+
+    Deliberately no default. This used to carry a literal password, which
+    put a live `neondb_owner` credential into a public repository's
+    history; the credential has since been rotated, but the fix that
+    matters is that no secret can be committed here again. Reading .env
+    means the only copy lives in a file .gitignore already excludes.
+    """
+    env_path = ROOT / ".env"
+    if not env_path.exists():
+        return None
+    for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        m = re.match(r"^\s*DATABASE_URL\s*=\s*(.+)$", line)
+        if not m:
+            continue
+        pw = re.search(r"://[^:]+:([^@]+)@", m.group(1).strip().strip("\"'"))
+        if pw:
+            return pw.group(1)
+    return None
+
+
 PASSED = FAILED = 0
 
 
@@ -38,9 +62,19 @@ def _env() -> dict:
     A minimal env was tried first and broke two things at once: psql
     was no longer on PATH, and localhost stopped resolving because the
     inherited resolver configuration was gone.
+
+    An existing PGPASSWORD is respected rather than overwritten, so the
+    credential can be supplied from outside the repository entirely.
     """
     env = dict(os.environ)
-    env["PGPASSWORD"] = "Irechukwu7."
+    if not env.get("PGPASSWORD"):
+        password = _password_from_env_file()
+        if not password:
+            raise SystemExit(
+                "No password available. Set PGPASSWORD in the environment, "
+                "or put DATABASE_URL in .env (which is git-ignored)."
+            )
+        env["PGPASSWORD"] = password
     return env
 
 
